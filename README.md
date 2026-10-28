@@ -111,6 +111,18 @@ El servidor valida fechas reales, horas, estados, longitudes e identificadores; 
 
 No se han creado repositorios remotos ni se han realizado despliegues. No hay URL pública configurada en este proyecto.
 
+### Git y GitHub
+
+El repositorio Git local contiene `main` y la rama `feature/reservas`, integradas en `main` con cinco commits significativos. No hay remoto configurado. Cuando se cree el repositorio en GitHub, agrega su URL y publica ambas ramas:
+
+```powershell
+git remote add origin https://github.com/USUARIO/senati-labreserve.git
+git push -u origin main
+git push -u origin feature/reservas
+```
+
+El PR y el enlace público deben añadirse únicamente después de crearlos realmente.
+
 ## Pruebas y estado de validación
 
 Las pruebas unitarias `backend/tests/validation.test.js` verifican la normalización de reservas, fecha inválida, duración y superposición/consecutividad. Ejecuta:
