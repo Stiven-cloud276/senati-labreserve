@@ -62,9 +62,9 @@ const reservationSchema = Yup.object({
 })
 
 const requesterSchema = Yup.object({
-  nombres: Yup.string().trim().min(2, 'Escribe al menos 2 caracteres.').max(80).required('Ingresa los nombres.'),
-  apellidos: Yup.string().trim().min(2, 'Escribe al menos 2 caracteres.').max(80).required('Ingresa los apellidos.'),
-  correo: Yup.string().email('Ingresa un correo válido.').max(160).required('Ingresa el correo.'),
+  nombres: Yup.string().trim().min(2, 'Escribe al menos 2 caracteres.').max(80, 'Máximo 80 caracteres.').required('Ingresa los nombres.'),
+  apellidos: Yup.string().trim().min(2, 'Escribe al menos 2 caracteres.').max(80, 'Máximo 80 caracteres.').required('Ingresa los apellidos.'),
+  correo: Yup.string().email('Ingresa un correo válido.').max(160, 'Máximo 160 caracteres.').required('Ingresa el correo.'),
   tipo_solicitante: Yup.string().oneOf(['instructor', 'personal', 'otro']).required('Selecciona el tipo.'),
 })
 

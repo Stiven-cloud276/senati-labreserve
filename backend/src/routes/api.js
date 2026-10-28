@@ -127,10 +127,12 @@ async function getReservation(connection, id) {
 }
 
 async function rollbackAndForward(connection, error, next) {
-  try {
-    await connection.rollback()
-  } catch (rollbackError) {
-    console.error('No se pudo revertir la transacción:', rollbackError.message)
+  if (connection) {
+    try {
+      await connection.rollback()
+    } catch (rollbackError) {
+      console.error('No se pudo revertir la transacción:', rollbackError.message)
+    }
   }
   next(error)
 }
