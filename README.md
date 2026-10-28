@@ -113,7 +113,7 @@ No se han creado repositorios remotos ni se han realizado despliegues. No hay UR
 
 ### Git y GitHub
 
-El repositorio Git local contiene `main` y la rama `feature/reservas`, integradas en `main` con cinco commits significativos. No hay remoto configurado. Cuando se cree el repositorio en GitHub, agrega su URL y publica ambas ramas:
+El repositorio Git local contiene `main` y la rama `feature/reservas`, con el desarrollo integrado en `main`. No hay remoto configurado. Cuando se cree el repositorio en GitHub, agrega su URL y publica ambas ramas:
 
 ```powershell
 git remote add origin https://github.com/USUARIO/senati-labreserve.git
