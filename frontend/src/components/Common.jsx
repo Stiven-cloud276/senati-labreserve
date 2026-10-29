@@ -1,4 +1,27 @@
-import { AlertCircle, LoaderCircle, Search } from 'lucide-react'
+import { useEffect, useId } from 'react'
+import { AlertCircle, LoaderCircle, Search, X } from 'lucide-react'
+
+export function Modal({ title, onClose, children, size = 'normal' }) {
+  const titleId = useId()
+  useEffect(() => {
+    function closeOnEscape(event) {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [onClose])
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onClose()
+    }}>
+      <section className={`modal ${size === 'wide' ? 'modal-wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby={titleId}>
+        <div className="modal-heading"><h2 id={titleId}>{title}</h2><button className="icon-button" type="button" onClick={onClose} aria-label="Cerrar ventana"><X size={16} /></button></div>
+        {children}
+      </section>
+    </div>
+  )
+}
 
 export function PageHeader({ eyebrow, title, description, children }) {
   return (

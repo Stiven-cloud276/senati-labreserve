@@ -21,7 +21,7 @@ services:
         sync: false
       - key: DB_NAME
         value: bd_reservas_laboratorios_senati
-      - key: API_WRITE_KEY
+      - key: AUTH_TOKEN_SECRET
         generateValue: true
       - key: CORS_ORIGINS
         sync: false

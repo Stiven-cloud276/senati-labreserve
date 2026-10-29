@@ -11,14 +11,16 @@ Sistema académico demostrativo de gestión de reserva de laboratorios para SENA
 - Calendario diario por laboratorio; selección de fecha y acceso al detalle de cada reserva.
 - Formularios de reserva con Formik/Yup y validación complementaria en el servidor.
 - Persistencia MySQL/MariaDB y prevención transaccional de reservas superpuestas.
-- Diseño adaptable, manejo de carga/errores y clave de escritura ingresada en tiempo de ejecución para producción.
+- Inicio de sesión, auto-registro de usuarios y permisos separados por rol.
+- Formularios de alta en modales, incluido el registro de laboratorios para administradores.
+- Diseño adaptable y manejo de estados de carga/error.
 
 ## Tecnologías y arquitectura
 
 | Capa | Tecnologías |
 |---|---|
 | Frontend | React, Vite, JavaScript, React Router, Formik, Yup, Lucide React |
-| Backend | Node.js, Express, mysql2/promise, dotenv, CORS, Helmet |
+| Backend | Node.js, Express, mysql2/promise, dotenv, JWT, bcrypt, CORS, Helmet |
 | Datos | MySQL/MariaDB, InnoDB, claves foráneas e índices |
 | Despliegue | GitHub Pages (frontend), Render (API), MySQL administrado externo |
 
@@ -42,11 +44,12 @@ Una reserva pendiente o confirmada bloquea disponibilidad; una cancelada no. Hay
 
 Desde PowerShell, en la carpeta del proyecto:
 
-1. Inicia Apache/MySQL en XAMPP. Importa `database/schema.sql` en phpMyAdmin. Si la cuenta tiene permisos limitados, crea primero la base y tablas con una cuenta administradora.
-2. Importa `database/seed.sql` en la base `bd_reservas_laboratorios_senati`. Los tres laboratorios, tres solicitantes y dos reservas de muestra son ficticios e idempotentes.
-3. Copia `backend/.env.example` a `backend/.env` y configura host, puerto, usuario y contraseña de MySQL. El archivo `.env` está excluido de Git.
-4. Copia `frontend/.env.example` a `frontend/.env` si la API no está en `http://localhost:3000/api`.
-5. Instala e inicia:
+1. Inicia Apache/MySQL en XAMPP y selecciona `bd_reservas_laboratorios_senati` en phpMyAdmin.
+2. Para una base vacía, importa `database/schema.sql`. Si ya tenía el esquema antiguo, ejecuta una sola vez `database/migrations/001_usuarios.sql` y luego `database/migrations/002_reservation_owner.sql`. No importes ambos caminos.
+3. Opcionalmente importa `database/seed.sql` para cargar los datos ficticios de demostración.
+4. Copia `backend/.env.example` a `backend/.env`, configura la conexión local de MySQL y define `AUTH_TOKEN_SECRET` con al menos 32 caracteres aleatorios. Puedes generar uno con `node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"`. El `.env` está excluido de Git; no uses un secreto real en los archivos `.example`.
+5. Copia `frontend/.env.example` a `frontend/.env` si la API no está en `http://localhost:3000/api`.
+6. Instala e inicia:
 
 ```powershell
 npm install
@@ -59,7 +62,13 @@ En otra terminal:
 npm run dev:frontend
 ```
 
-Abre la URL que muestre Vite (habitualmente `http://localhost:5173`). En desarrollo las escrituras están disponibles sin clave salvo que se establezca `API_WRITE_KEY`.
+Abre la URL que muestre Vite (habitualmente `http://localhost:5173`). El endpoint `/api/health` comprueba la conexión a MySQL. Si el esquema aún no se ha importado, primero prepara las tablas y después crea el administrador:
+
+```powershell
+npm run create-admin --workspace backend
+```
+
+El comando solicita los datos de la cuenta en una terminal interactiva y solo crea el primer administrador. Los visitantes pueden crear una cuenta estándar desde la pantalla de acceso; el auto-registro no permite asignar el rol de administrador.
 
 ### Cuenta de MySQL con privilegios limitados
 
@@ -80,6 +89,9 @@ Todas las respuestas exitosas usan `{ "data": ... }`; los errores usan `{ "error
 | Método | Ruta | Uso |
 |---|---|---|
 | GET | `/api/health` | Estado del proceso y conexión de datos |
+| POST | `/api/auth/register` | Crear cuenta estándar |
+| POST | `/api/auth/login` | Iniciar sesión |
+| GET | `/api/auth/me` | Consultar la cuenta autenticada |
 | GET | `/api/dashboard` | Indicadores y próximas reservas |
 | GET | `/api/laboratorios` | Laboratorios |
 | GET, POST | `/api/solicitantes` | Listar y registrar solicitantes |
@@ -90,7 +102,7 @@ Todas las respuestas exitosas usan `{ "data": ... }`; los errores usan `{ "error
 | DELETE | `/api/reservas/:id` | Eliminar (respuesta 204) |
 | GET | `/api/disponibilidad?fecha=AAAA-MM-DD` | Reservas agrupadas por laboratorio |
 
-El servidor valida fechas reales, horas, estados, longitudes e identificadores; utiliza consultas parametrizadas. Un conflicto responde HTTP 409. Las fechas y el calendario se operan en `America/Lima` (UTC−05:00).
+Todas las rutas salvo health, login y registro requieren un token Bearer. Los usuarios pueden consultar y registrar reservas y solicitantes; no pueden editar ni eliminar registros, ni confirmar reservas. El administrador puede registrar laboratorios, cambiar estados, editar y eliminar reservas. El servidor valida fechas reales, horas, estados, longitudes e identificadores; utiliza consultas parametrizadas. Un conflicto responde HTTP 409. Las fechas y el calendario se operan en `America/Lima` (UTC−05:00). El token se conserva en memoria: al recargar la página se debe iniciar sesión nuevamente.
 
 ## Configuración y despliegue
 
@@ -98,8 +110,8 @@ El servidor valida fechas reales, horas, estados, longitudes e identificadores; 
 
 1. Crea una base MySQL administrada fuera de Render y carga `database/schema.sql` y `database/seed.sql`.
 2. Despliega este repositorio en Render usando `render.yaml` o configura como directorio raíz el repositorio y ejecuta `npm ci`; comando de inicio: `npm run start --workspace backend`.
-3. Configura `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSL=true`, `API_WRITE_KEY` y `CORS_ORIGINS`. La clave de escritura debe ser aleatoria y privada; Render la genera al aplicar el blueprint. `CORS_ORIGINS` debe contener el origen exacto de GitHub Pages, por ejemplo `https://USUARIO.github.io` (sin ruta).
-4. El proceso de producción se niega a iniciar si falta `API_WRITE_KEY`. Las escrituras requieren el encabezado `x-api-key`; en la interfaz, el administrador la ingresa en “Acceso de escritura”. La clave permanece solo en memoria de la pestaña y no forma parte del bundle público.
+3. Configura `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSL=true` y `CORS_ORIGINS`. El blueprint genera `AUTH_TOKEN_SECRET`; conserva el valor solo en Render y no lo incluyas en el frontend. `CORS_ORIGINS` debe contener el origen exacto de GitHub Pages, por ejemplo `https://USUARIO.github.io` (sin ruta).
+4. Importa el esquema y crea el primer administrador ejecutando `npm run create-admin --workspace backend` desde una terminal interactiva con las variables de conexión disponibles.
 5. `/api/health` verifica la conectividad MySQL. El plan gratuito de Render puede suspender el servicio por inactividad; la primera petición posterior puede tardar.
 
 ### GitHub Pages (frontend)
@@ -125,7 +137,7 @@ El PR y el enlace público deben añadirse únicamente después de crearlos real
 
 ## Pruebas y estado de validación
 
-Las pruebas unitarias `backend/tests/validation.test.js` verifican la normalización de reservas, fecha inválida, duración y superposición/consecutividad. Ejecuta:
+Las pruebas unitarias verifican autenticación/autorización y validación de reservas. Ejecuta:
 
 ```powershell
 npm test

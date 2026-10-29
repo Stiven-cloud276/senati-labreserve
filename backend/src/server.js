@@ -1,11 +1,11 @@
-import 'dotenv/config'
+import './config/env.js'
 import app from './app.js'
 import pool from './db/pool.js'
 
 const port = Number(process.env.PORT || 3000)
 
-if (process.env.NODE_ENV === 'production' && (!process.env.API_WRITE_KEY || process.env.API_WRITE_KEY.length < 32)) {
-  console.error('API_WRITE_KEY debe tener al menos 32 caracteres en producción para proteger las operaciones de escritura.')
+if (!process.env.AUTH_TOKEN_SECRET || process.env.AUTH_TOKEN_SECRET.length < 32) {
+  console.error('AUTH_TOKEN_SECRET debe tener al menos 32 caracteres. Genera uno localmente antes de iniciar la API.')
   process.exit(1)
 }
 

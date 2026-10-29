@@ -6,16 +6,17 @@ El workflow `.github/workflows/pages.yml` construye `frontend` y publica `fronte
 
 ## Render y MySQL administrado
 
-`render.yaml` define la API, su health check y las variables de entorno. Completa host, usuario, contraseña, nombre de base de datos, CORS y TLS desde el panel de Render. Usa un servicio MySQL persistente externo (Aiven u otro compatible); importa los dos SQL desde una herramienta con permisos suficientes. No uses disco efímero para los datos.
+`render.yaml` define la API, su health check y las variables de entorno. Completa host, usuario, contraseña, nombre de base de datos, CORS y TLS desde el panel de Render. Usa un servicio MySQL persistente externo (Aiven u otro compatible); importa el esquema y, opcionalmente, los datos de muestra desde una herramienta con permisos suficientes. No uses disco efímero para los datos.
 
-`API_WRITE_KEY` se genera en Render. La interfaz no incorpora esa clave en su bundle: un operador autorizado la introduce en cada sesión desde “Acceso de escritura”. La lectura GET permanece pública en esta versión académica.
+El blueprint genera `AUTH_TOKEN_SECRET`; mantenlo solo como variable privada del backend. Crea el administrador inicial mediante `npm run create-admin --workspace backend` desde un entorno interactivo conectado a la base. El registro público crea exclusivamente cuentas estándar. Las rutas de datos exigen Bearer token.
 
 ## Lista antes de publicar
 
 - Crear repositorio remoto en GitHub y subir el monorepo; no hay remoto configurado en el entorno actual.
-- Configurar secrets/variables y restringir acceso al proyecto y su clave.
+- Configurar secrets/variables y restringir acceso al proyecto.
 - Sustituir `CORS_ORIGINS` por el origen exacto de GitHub Pages.
-- Importar esquema y datos ficticios en la base administrada y verificar TLS.
+- Importar esquema (y, opcionalmente, datos ficticios) en la base administrada y verificar TLS.
+- Crear la primera cuenta administradora desde una terminal segura.
 - Ejecutar la suite y pruebas manuales de API/horarios concurrentes.
 - Configurar GitHub Pages y validar las rutas, recursos y mutaciones a través del backend.
 - No incluir nombres, credenciales ni datos reales de estudiantes.

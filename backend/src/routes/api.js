@@ -1,12 +1,21 @@
 import { Router } from 'express'
+import { rateLimit } from 'express-rate-limit'
 import pool from '../db/pool.js'
 import { AppError } from '../utils/errors.js'
-import { blockingStatuses, isValidDate, parsePositiveId, validateRequester, validateReservation } from '../utils/validation.js'
-import { writeAccess } from '../middlewares/writeAccess.js'
+import { blockingStatuses, isValidDate, parsePositiveId, validateLaboratory, validateRequester, validateReservation } from '../utils/validation.js'
+import { authenticate, issueToken, requireRole } from '../middlewares/auth.js'
+import { createAccount, validateAccountCredentials, validateLoginCredentials, verifyPassword } from '../services/accounts.js'
 
 const router = Router()
+const authenticationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: { message: 'Demasiados intentos. Espera unos minutos antes de volver a intentarlo.' } },
+})
 const reservationSelect = `
-  SELECT r.id, r.laboratorio_id, r.solicitante_id, DATE_FORMAT(r.fecha, '%Y-%m-%d') AS fecha,
+  SELECT r.id, r.laboratorio_id, r.solicitante_id, r.usuario_id, DATE_FORMAT(r.fecha, '%Y-%m-%d') AS fecha,
     TIME_FORMAT(r.hora_inicio, '%H:%i:%s') AS hora_inicio,
     TIME_FORMAT(r.hora_fin, '%H:%i:%s') AS hora_fin, r.motivo, r.estado, r.observaciones,
     r.created_at, r.updated_at, l.codigo AS laboratorio_codigo, l.nombre AS laboratorio_nombre,
@@ -20,6 +29,42 @@ router.get('/health', async (_request, response, next) => {
     await pool.query('SELECT 1')
     response.json({ data: { status: 'ok', database: 'connected', timezone: 'America/Lima' } })
   } catch (error) { next(error) }
+})
+
+router.post('/auth/register', authenticationLimiter, async (request, response, next) => {
+  try {
+    const account = validateAccountCredentials(request.body)
+    const user = await createAccount(account)
+    response.status(201).json({ data: { token: issueToken(user), user } })
+  } catch (error) { next(error) }
+})
+
+router.post('/auth/login', authenticationLimiter, async (request, response, next) => {
+  try {
+    const credentials = validateLoginCredentials(request.body)
+    const [rows] = await pool.execute(
+      `SELECT id, nombres, apellidos, correo, password_hash, role
+       FROM usuarios WHERE correo = ? AND activo = 1 LIMIT 1`,
+      [credentials.correo],
+    )
+    if (!rows.length || !await verifyPassword(credentials.password, rows[0].password_hash)) {
+      throw new AppError('Correo o contraseña incorrectos.', 401)
+    }
+    const user = {
+      id: rows[0].id,
+      nombres: rows[0].nombres,
+      apellidos: rows[0].apellidos,
+      correo: rows[0].correo,
+      role: rows[0].role,
+    }
+    response.json({ data: { token: issueToken(user), user } })
+  } catch (error) { next(error) }
+})
+
+router.use(authenticate)
+
+router.get('/auth/me', (request, response) => {
+  response.json({ data: { user: request.user } })
 })
 
 router.get('/laboratorios', async (_request, response, next) => {
@@ -45,7 +90,7 @@ router.get('/solicitantes', async (request, response, next) => {
   } catch (error) { next(error) }
 })
 
-router.post('/solicitantes', writeAccess, async (request, response, next) => {
+router.post('/solicitantes', async (request, response, next) => {
   try {
     const requester = validateRequester(request.body)
     const [result] = await pool.execute(
@@ -53,6 +98,19 @@ router.post('/solicitantes', writeAccess, async (request, response, next) => {
       [requester.nombres, requester.apellidos, requester.correo, requester.tipo_solicitante],
     )
     response.status(201).json({ data: { id: result.insertId, ...requester } })
+  } catch (error) { next(error) }
+})
+
+router.post('/laboratorios', requireRole('admin'), async (request, response, next) => {
+  try {
+    const laboratory = validateLaboratory(request.body)
+    const [result] = await pool.execute(
+      `INSERT INTO laboratorios (codigo, nombre, ubicacion, capacidad, descripcion, equipamiento, estado)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [laboratory.codigo, laboratory.nombre, laboratory.ubicacion, laboratory.capacidad,
+        laboratory.descripcion, laboratory.equipamiento, laboratory.estado],
+    )
+    response.status(201).json({ data: { id: result.insertId, ...laboratory } })
   } catch (error) { next(error) }
 })
 
@@ -137,19 +195,20 @@ async function rollbackAndForward(connection, error, next) {
   next(error)
 }
 
-router.post('/reservas', writeAccess, async (request, response, next) => {
+router.post('/reservas', async (request, response, next) => {
   let connection
   try {
     connection = await pool.getConnection()
     const reservation = validateReservation(request.body)
+    if (request.user.role !== 'admin') reservation.estado = 'pendiente'
     await connection.beginTransaction()
     await ensureRelatedRecords(connection, reservation)
     if (blockingStatuses.includes(reservation.estado)) await ensureAvailable(connection, reservation)
     const [result] = await connection.execute(
       `INSERT INTO reservas
-       (laboratorio_id, solicitante_id, fecha, hora_inicio, hora_fin, motivo, estado, observaciones)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [reservation.laboratorio_id, reservation.solicitante_id, reservation.fecha, reservation.hora_inicio,
+       (laboratorio_id, solicitante_id, usuario_id, fecha, hora_inicio, hora_fin, motivo, estado, observaciones)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [reservation.laboratorio_id, reservation.solicitante_id, request.user.id, reservation.fecha, reservation.hora_inicio,
         reservation.hora_fin, reservation.motivo, reservation.estado, reservation.observaciones],
     )
     const created = await getReservation(connection, result.insertId)
@@ -160,7 +219,7 @@ router.post('/reservas', writeAccess, async (request, response, next) => {
   } finally { connection?.release() }
 })
 
-router.put('/reservas/:id', writeAccess, async (request, response, next) => {
+router.put('/reservas/:id', requireRole('admin'), async (request, response, next) => {
   let connection
   try {
     connection = await pool.getConnection()
@@ -185,11 +244,13 @@ router.put('/reservas/:id', writeAccess, async (request, response, next) => {
   } finally { connection?.release() }
 })
 
-router.delete('/reservas/:id', writeAccess, async (request, response, next) => {
+router.delete('/reservas/:id', requireRole('admin'), async (request, response, next) => {
   try {
     const id = parsePositiveId(request.params.id, 'Reserva')
     const [result] = await pool.execute('DELETE FROM reservas WHERE id = ?', [id])
-    if (!result.affectedRows) throw new AppError('La reserva solicitada no existe.', 404)
+    if (!result.affectedRows) {
+      throw new AppError('La reserva solicitada no existe.', 404)
+    }
     response.status(204).end()
   } catch (error) { next(error) }
 })

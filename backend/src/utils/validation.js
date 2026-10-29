@@ -59,6 +59,31 @@ export function validateRequester(body = {}) {
   return { nombres, apellidos, correo, tipo_solicitante }
 }
 
+export function validateLaboratory(body = {}) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new AppError('El cuerpo del laboratorio debe ser un objeto JSON.', 400)
+  }
+  const codigo = requiredText(body.codigo, 'El código', 20).toUpperCase()
+  const nombre = requiredText(body.nombre, 'El nombre', 100)
+  const ubicacion = requiredText(body.ubicacion, 'La ubicación', 120)
+  const capacidad = Number(body.capacidad)
+  if (!Number.isSafeInteger(capacidad) || capacidad <= 0 || capacidad > 65535) {
+    throw new AppError('La capacidad debe ser un número entero positivo menor a 65536.', 400)
+  }
+  const descripcion = body.descripcion == null ? '' : body.descripcion
+  const equipamiento = body.equipamiento == null ? '' : body.equipamiento
+  if (typeof descripcion !== 'string' || descripcion.length > 500) {
+    throw new AppError('La descripción no puede superar 500 caracteres.', 400)
+  }
+  if (typeof equipamiento !== 'string' || equipamiento.length > 500) {
+    throw new AppError('El equipamiento no puede superar 500 caracteres.', 400)
+  }
+  if (!['activo', 'inactivo'].includes(body.estado)) {
+    throw new AppError('El estado debe ser activo o inactivo.', 400)
+  }
+  return { codigo, nombre, ubicacion, capacidad, descripcion: descripcion.trim(), equipamiento: equipamiento.trim(), estado: body.estado }
+}
+
 export function hasTimeConflict(start, end, existingReservations) {
   return existingReservations.some((reservation) => (
     start < reservation.hora_fin && end > reservation.hora_inicio

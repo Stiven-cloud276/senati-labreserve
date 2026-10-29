@@ -15,10 +15,10 @@ import {
   Trash2,
   UsersRound,
 } from 'lucide-react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api } from './services/api'
 import { errorMessage, formatDate, shiftLocalDate, statusLabel, todayLocal } from './utils/format'
-import { EmptyState, ErrorState, LoadingState, PageHeader, StatusBadge, Toast } from './components/Common'
+import { EmptyState, ErrorState, LoadingState, Modal, PageHeader, StatusBadge, Toast } from './components/Common'
 
 function useResource(loader, dependencies = []) {
   const [data, setData] = useState(null)
@@ -68,6 +68,16 @@ const requesterSchema = Yup.object({
   tipo_solicitante: Yup.string().oneOf(['instructor', 'personal', 'otro']).required('Selecciona el tipo.'),
 })
 
+const laboratorySchema = Yup.object({
+  codigo: Yup.string().trim().max(20, 'Máximo 20 caracteres.').required('Ingresa el código.'),
+  nombre: Yup.string().trim().max(100, 'Máximo 100 caracteres.').required('Ingresa el nombre.'),
+  ubicacion: Yup.string().trim().max(120, 'Máximo 120 caracteres.').required('Ingresa la ubicación.'),
+  capacidad: Yup.number().typeError('Ingresa una capacidad válida.').integer('Debe ser un número entero.').min(1, 'Mínimo 1 persona.').max(65535, 'La capacidad es demasiado alta.').required('Ingresa la capacidad.'),
+  descripcion: Yup.string().max(500, 'Máximo 500 caracteres.'),
+  equipamiento: Yup.string().max(500, 'Máximo 500 caracteres.'),
+  estado: Yup.string().oneOf(['activo', 'inactivo']).required('Selecciona el estado.'),
+})
+
 function FormField({ name, label, as, children, full = false, ...props }) {
   return (
     <div className={`form-field ${full ? 'full' : ''}`}>
@@ -78,7 +88,7 @@ function FormField({ name, label, as, children, full = false, ...props }) {
   )
 }
 
-function ReservationRows({ reservations, onDelete }) {
+function ReservationRows({ reservations, onDelete, user }) {
   if (!reservations.length) return (
     <EmptyState title="No hay reservas que mostrar" description="Crea una reserva o ajusta los filtros para consultar los registros." action={<Link className="button" to="/reservas/nueva"><Plus size={14} /> Nueva reserva</Link>} />
   )
@@ -96,8 +106,10 @@ function ReservationRows({ reservations, onDelete }) {
               <td><StatusBadge status={item.estado} /></td>
               <td><div className="table-actions">
                 <Link className="icon-button" to={`/reservas/${item.id}`} aria-label={`Ver reserva ${item.id}`}><Eye size={14} /></Link>
-                <Link className="icon-button" to={`/reservas/${item.id}/editar`} aria-label={`Editar reserva ${item.id}`}><Pencil size={14} /></Link>
-                <button className="icon-button delete" type="button" onClick={() => onDelete(item)} aria-label={`Eliminar reserva ${item.id}`}><Trash2 size={14} /></button>
+                {user.role === 'admin' && <>
+                  <Link className="icon-button" to={`/reservas/${item.id}/editar`} aria-label={`Editar reserva ${item.id}`}><Pencil size={14} /></Link>
+                  <button className="icon-button delete" type="button" onClick={() => onDelete(item)} aria-label={`Eliminar reserva ${item.id}`}><Trash2 size={14} /></button>
+                </>}
               </div></td>
             </tr>
           ))}
@@ -107,7 +119,7 @@ function ReservationRows({ reservations, onDelete }) {
   )
 }
 
-export function DashboardPage() {
+export function DashboardPage({ user }) {
   const { data, error, loading, reload } = useResource(() => api.dashboard())
   if (loading) return <LoadingState />
   if (error) return <><PageHeader eyebrow="Vista general" title="Panel principal" description="Resumen actualizado de la gestión de laboratorios." /><ErrorState error={error} onRetry={reload} /></>
@@ -122,7 +134,7 @@ export function DashboardPage() {
       <section className="dashboard-hero">
         <div className="hero-copy">
           <div className="hero-tag"><span>✦</span> Gestión inteligente de espacios</div>
-          <h1>Hola, bienvenido a LABRESERVE</h1>
+          <h1>¡Bienvenido, {user.nombres}!</h1>
           <p>Organiza el uso de los laboratorios del SENATI CFP Huaraz. Revisa disponibilidad y administra tus solicitudes desde un solo lugar.</p>
         </div>
         <Link className="button button-hero hero-action" to="/reservas/nueva"><Plus size={15} /> Crear una reserva</Link>
@@ -155,19 +167,20 @@ export function DashboardPage() {
   )
 }
 
-export function ReservationsPage() {
+export function ReservationsPage({ user }) {
   const { data, error, loading, reload } = useResource(() => api.reservations())
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [toast, setToast] = useState('')
   const [actionError, setActionError] = useState('')
+  const [reservationToDelete, setReservationToDelete] = useState(null)
 
   async function remove(item) {
-    if (!window.confirm(`¿Eliminar la reserva LR-${String(item.id).padStart(4, '0')}? Esta acción no se puede deshacer.`)) return
     try {
       await api.deleteReservation(item.id)
       setToast('La reserva se eliminó correctamente.')
       await reload()
+      setReservationToDelete(null)
     } catch (error) {
       setActionError(errorMessage(error))
     }
@@ -192,17 +205,31 @@ export function ReservationsPage() {
           <span className="page-description">{filtered.length} registros</span>
         </div>
         {actionError && <Toast message={actionError} error />}
-        {loading ? <LoadingState /> : error ? <ErrorState error={error} onRetry={reload} /> : <ReservationRows reservations={filtered} onDelete={remove} />}
+        {loading ? <LoadingState /> : error ? <ErrorState error={error} onRetry={reload} /> : <ReservationRows reservations={filtered} onDelete={remove} user={user} />}
       </section>
       <Toast message={toast} />
+      {reservationToDelete && <Modal title="Confirmar eliminación" onClose={() => setReservationToDelete(null)}>
+        <p>¿Eliminar la reserva LR-{String(reservationToDelete.id).padStart(4, '0')}? Esta acción no se puede deshacer.</p>
+        {actionError && <div className="inline-error" role="alert">{actionError}</div>}
+        <div className="form-actions">
+          <button type="button" className="button button-secondary" onClick={() => setReservationToDelete(null)}>Cancelar</button>
+          <button type="button" className="button button-danger" onClick={() => remove(reservationToDelete)}>Eliminar reserva</button>
+        </div>
+      </Modal>}
     </>
   )
 }
 
-export function ReservationFormPage() {
+export function ReservationCreatePage({ user }) {
+  return <><ReservationsPage user={user} /><ReservationFormPage modal user={user} /></>
+}
+
+export function ReservationFormPage({ modal = false, user }) {
   const { id } = useParams()
+  const location = useLocation()
   const editing = Boolean(id)
   const navigate = useNavigate()
+  const closeModal = () => navigate('/reservas')
   const [options, setOptions] = useState({ laboratories: [], requesters: [] })
   const [initialValues, setInitialValues] = useState(null)
   const [loadError, setLoadError] = useState('')
@@ -224,8 +251,8 @@ export function ReservationFormPage() {
           hora_fin: String(reservation.hora_fin).slice(0, 5), motivo: reservation.motivo,
           estado: reservation.estado, observaciones: reservation.observaciones || '',
         } : {
-          laboratorio_id: new URLSearchParams(window.location.hash.split('?')[1] || '').get('laboratorio') || '',
-          solicitante_id: '', fecha: new URLSearchParams(window.location.hash.split('?')[1] || '').get('fecha') || todayLocal(), hora_inicio: '', hora_fin: '',
+          laboratorio_id: new URLSearchParams(location.search).get('laboratorio') || '',
+          solicitante_id: '', fecha: new URLSearchParams(location.search).get('fecha') || todayLocal(), hora_inicio: '', hora_fin: '',
           motivo: '', estado: 'pendiente', observaciones: '',
         })
       } catch (error) {
@@ -236,12 +263,17 @@ export function ReservationFormPage() {
     }
     load()
     return () => { active = false }
-  }, [editing, id])
+  }, [editing, id, location.search])
 
   async function submit(values, { setSubmitting, setStatus }) {
     setStatus('')
     try {
-      const payload = { ...values, laboratorio_id: Number(values.laboratorio_id), solicitante_id: Number(values.solicitante_id) }
+      const payload = {
+        ...values,
+        laboratorio_id: Number(values.laboratorio_id),
+        solicitante_id: Number(values.solicitante_id),
+        estado: user.role === 'admin' ? values.estado : 'pendiente',
+      }
       if (editing) await api.updateReservation(id, payload)
       else await api.createReservation(payload)
       setToast(editing ? 'Los cambios de la reserva se guardaron.' : 'La reserva se registró correctamente.')
@@ -253,56 +285,72 @@ export function ReservationFormPage() {
     }
   }
 
-  if (loading) return <LoadingState label={editing ? 'Cargando reserva...' : 'Preparando formulario...'} />
-  if (loadError) return <><PageHeader eyebrow="Reservas" title={editing ? 'Editar reserva' : 'Nueva reserva'} /><ErrorState error={loadError} /></>
-  const activeLaboratories = options.laboratories.filter((item) => item.estado === 'activo')
-  if (!activeLaboratories.length || !options.requesters.length) return <><PageHeader eyebrow="Reservas" title={editing ? 'Editar reserva' : 'Nueva reserva'} /><EmptyState title="Faltan datos para reservar" description="Se necesita al menos un laboratorio activo y un solicitante registrado antes de reservar." action={<Link className="button" to="/solicitantes">Ir a solicitantes</Link>} /></>
+  const title = editing ? 'Editar reserva' : 'Nueva reserva'
+  if (loading) {
+    const loadingContent = <LoadingState label={editing ? 'Cargando reserva...' : 'Preparando formulario...'} />
+    return modal ? <Modal title={title} onClose={closeModal}>{loadingContent}</Modal> : loadingContent
+  }
+  if (loadError) {
+    const errorContent = <ErrorState error={loadError} />
+    return modal ? <Modal title={title} onClose={closeModal}>{errorContent}</Modal> : <><PageHeader eyebrow="Reservas" title={title} />{errorContent}</>
+  }
+  const activeLaboratories = options.laboratories.filter((item) => item.estado === 'activo' || Number(item.id) === Number(initialValues?.laboratorio_id))
+  if (!activeLaboratories.length || !options.requesters.length) {
+    const emptyContent = <EmptyState title="Faltan datos para reservar" description="Se necesita al menos un laboratorio activo y un solicitante registrado antes de reservar." action={<Link className="button" to={activeLaboratories.length ? '/solicitantes' : '/laboratorios'}>{activeLaboratories.length ? 'Ir a solicitantes' : 'Ir a laboratorios'}</Link>} />
+    return modal ? <Modal title={title} onClose={closeModal}>{emptyContent}</Modal> : <><PageHeader eyebrow="Reservas" title={title} />{emptyContent}</>
+  }
 
-  return (
-    <>
-      <PageHeader eyebrow="Gestión de espacios" title={editing ? 'Editar reserva' : 'Nueva reserva'} description={editing ? 'Actualiza los datos. El sistema volverá a validar la disponibilidad.' : 'Completa los datos de la solicitud. Los conflictos se verifican también en el servidor.'}>
-        <Link className="button button-secondary" to={editing ? `/reservas/${id}` : '/reservas'}><ArrowLeft size={14} /> Volver</Link>
-      </PageHeader>
-      <div className="form-layout">
-        <Formik initialValues={initialValues} validationSchema={reservationSchema} onSubmit={submit} enableReinitialize>
-          {({ isSubmitting, status }) => <Form className="form-card">
-            <div className="form-grid">
-              <FormField name="laboratorio_id" label="Laboratorio" as="select">
-                <option value="">Selecciona un laboratorio</option>
-                {activeLaboratories.map((item) => <option value={item.id} key={item.id}>{item.codigo} — {item.nombre}</option>)}
-              </FormField>
-              <FormField name="solicitante_id" label="Solicitante" as="select">
-                <option value="">Selecciona un solicitante</option>
-                {options.requesters.map((item) => <option value={item.id} key={item.id}>{item.nombres} {item.apellidos}</option>)}
-              </FormField>
-              <FormField name="fecha" label="Fecha" type="date" />
-              <FormField name="estado" label="Estado" as="select">
-                <option value="pendiente">Pendiente</option><option value="confirmada">Confirmada</option><option value="cancelada">Cancelada</option>
-              </FormField>
-              <FormField name="hora_inicio" label="Hora de inicio" type="time" />
-              <FormField name="hora_fin" label="Hora de finalización" type="time" />
-              <FormField name="motivo" label="Motivo de la reserva" full placeholder="Ej. Sesión de prácticas de desarrollo web" />
-              <FormField name="observaciones" label="Observaciones (opcional)" as="textarea" full placeholder="Información adicional para la reserva" />
-            </div>
-            {status && <div className="toast error" role="alert">{status}</div>}
-            <div className="form-actions">
-              <Link className="button button-secondary" to={editing ? `/reservas/${id}` : '/reservas'}>Cancelar</Link>
-              <button className="button" type="submit" disabled={isSubmitting}>{isSubmitting ? 'Guardando...' : editing ? 'Guardar cambios' : 'Registrar reserva'}</button>
-            </div>
-          </Form>}
-        </Formik>
-        <aside className="hint-card">
-          <h3>Antes de reservar</h3>
-          <p>La disponibilidad se confirma en el servidor al guardar para evitar que dos personas ocupen el mismo laboratorio simultáneamente.</p>
-          <ul><li>La hora final debe ser posterior a la inicial.</li><li>Las reservas pendientes y confirmadas bloquean horario.</li><li>Las canceladas no bloquean la disponibilidad.</li></ul>
-        </aside>
-      </div>
-      <Toast message={toast} />
-    </>
+  const formContent = (
+    <Formik initialValues={initialValues} validationSchema={reservationSchema} onSubmit={submit} enableReinitialize>
+      {({ isSubmitting, status }) => <Form className="form-card">
+        <div className="form-grid">
+          <FormField name="laboratorio_id" label="Laboratorio" as="select">
+            <option value="">Selecciona un laboratorio</option>
+            {activeLaboratories.map((item) => <option value={item.id} key={item.id}>{item.codigo} — {item.nombre}</option>)}
+          </FormField>
+          <FormField name="solicitante_id" label="Solicitante" as="select">
+            <option value="">Selecciona un solicitante</option>
+            {options.requesters.map((item) => <option value={item.id} key={item.id}>{item.nombres} {item.apellidos}</option>)}
+          </FormField>
+          <FormField name="fecha" label="Fecha" type="date" />
+          {user.role === 'admin' && <FormField name="estado" label="Estado" as="select">
+            <option value="pendiente">Pendiente</option><option value="confirmada">Confirmada</option><option value="cancelada">Cancelada</option>
+          </FormField>}
+          <FormField name="hora_inicio" label="Hora de inicio" type="time" />
+          <FormField name="hora_fin" label="Hora de finalización" type="time" />
+          <FormField name="motivo" label="Motivo de la reserva" full placeholder="Ej. Sesión de prácticas de desarrollo web" />
+          <FormField name="observaciones" label="Observaciones (opcional)" as="textarea" full placeholder="Información adicional para la reserva" />
+        </div>
+        {status && <div className="inline-error" role="alert">{status}</div>}
+        <div className="form-actions">
+          <button className="button button-secondary" type="button" onClick={modal ? closeModal : () => navigate(`/reservas/${id}`)}>Cancelar</button>
+          <button className="button" type="submit" disabled={isSubmitting}>{isSubmitting ? 'Guardando...' : editing ? 'Guardar cambios' : 'Registrar reserva'}</button>
+        </div>
+      </Form>}
+    </Formik>
   )
+
+  const hint = <aside className="hint-card">
+    <h3>Antes de reservar</h3>
+    <p>La disponibilidad se confirma en el servidor al guardar para evitar que dos personas ocupen el mismo laboratorio simultáneamente.</p>
+    <ul><li>La hora final debe ser posterior a la inicial.</li><li>Las reservas pendientes y confirmadas bloquean horario.</li><li>Las canceladas no bloquean la disponibilidad.</li></ul>
+  </aside>
+
+  if (modal) return <Modal title={title} size="wide" onClose={closeModal}>
+    <p className="modal-intro">Completa los datos de la solicitud. El backend comprobará la disponibilidad antes de guardar.</p>
+    <div className="reservation-modal-grid"><div>{formContent}</div>{hint}</div>
+  </Modal>
+
+  return <>
+    <PageHeader eyebrow="Gestión de espacios" title={title} description="Actualiza los datos. El sistema volverá a validar la disponibilidad.">
+      <Link className="button button-secondary" to={`/reservas/${id}`}><ArrowLeft size={14} /> Volver</Link>
+    </PageHeader>
+    <div className="form-layout">{formContent}{hint}</div>
+    <Toast message={toast} />
+  </>
 }
 
-export function ReservationDetailPage() {
+export function ReservationDetailPage({ user }) {
   const { id } = useParams()
   const { data, error, loading, reload } = useResource(() => api.reservation(id), [id])
   if (loading) return <LoadingState label="Cargando detalle..." />
@@ -324,20 +372,41 @@ export function ReservationDetailPage() {
           <div className="detail-item"><span>Creada</span><strong>{new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Lima' }).format(new Date(data.created_at))}</strong></div>
           <div className="detail-item"><span>Estado</span><strong>{statusLabel(data.estado)}</strong></div>
         </div>
-        <div className="detail-actions"><Link className="button" to={`/reservas/${id}/editar`}><Pencil size={14} /> Editar reserva</Link></div>
+        {user.role === 'admin' && <div className="detail-actions"><Link className="button" to={`/reservas/${id}/editar`}><Pencil size={14} /> Editar reserva</Link></div>}
       </section>
     </>
   )
 }
 
-export function LaboratoryPage() {
+export function LaboratoryPage({ user }) {
   const { data, error, loading, reload } = useResource(() => api.laboratories())
   const [search, setSearch] = useState('')
+  const [modalOpen, setModalOpen] = useState(false)
+  const [toast, setToast] = useState('')
   const filtered = (data || []).filter((item) => `${item.codigo} ${item.nombre} ${item.ubicacion}`.toLowerCase().includes(search.toLowerCase()))
+
+  async function createLaboratory(values, { resetForm, setSubmitting, setStatus }) {
+    setStatus('')
+    try {
+      await api.createLaboratory({ ...values, capacidad: Number(values.capacidad) })
+      resetForm()
+      setModalOpen(false)
+      setToast('Laboratorio registrado correctamente.')
+      await reload()
+    } catch (error) {
+      setStatus(errorMessage(error))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
     <>
       <PageHeader eyebrow="Espacios de aprendizaje" title="Laboratorios" description="Consulta los ambientes disponibles, su capacidad y equipamiento.">
-        <Link className="button" to="/reservas/nueva"><Plus size={15} /> Crear reserva</Link>
+        <div className="toolbar-controls">
+          {user.role === 'admin' && <button className="button button-secondary" type="button" onClick={() => setModalOpen(true)}><Plus size={15} /> Registrar laboratorio</button>}
+          <Link className="button" to="/reservas/nueva"><CalendarDays size={15} /> Nueva reserva</Link>
+        </div>
       </PageHeader>
       <div className="toolbar"><label className="search-control"><Search size={14} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar laboratorio..." aria-label="Buscar laboratorio" /></label><span className="page-description">{filtered.length} espacios</span></div>
       {loading ? <LoadingState /> : error ? <ErrorState error={error} onRetry={reload} /> : filtered.length ? <div className="laboratory-grid">{filtered.map((item) => <article className="laboratory-card" key={item.id}>
@@ -348,6 +417,28 @@ export function LaboratoryPage() {
           {item.estado === 'activo' && <Link className="button" to={`/reservas/nueva?laboratorio=${item.id}`}><CalendarDays size={14} /> Solicitar laboratorio</Link>}
         </div>
       </article>)}</div> : <EmptyState title="No encontramos laboratorios" description="Prueba con otro término de búsqueda." />}
+      <Toast message={toast} />
+      {modalOpen && <Modal title="Registrar laboratorio" onClose={() => setModalOpen(false)}>
+        <p className="modal-intro">Completa la información del espacio. El código debe ser único.</p>
+        <Formik initialValues={{ codigo: '', nombre: '', ubicacion: '', capacidad: '', descripcion: '', equipamiento: '', estado: 'activo' }} validationSchema={laboratorySchema} onSubmit={createLaboratory}>
+          {({ isSubmitting, status }) => <Form>
+            <div className="form-grid">
+              <FormField name="codigo" label="Código" placeholder="Ej. LAB-04" />
+              <FormField name="nombre" label="Nombre" placeholder="Nombre del laboratorio" />
+              <FormField name="ubicacion" label="Ubicación" placeholder="Pabellón y nivel" />
+              <FormField name="capacidad" label="Capacidad" type="number" min="1" />
+              <FormField name="estado" label="Estado" as="select"><option value="activo">Activo</option><option value="inactivo">Inactivo</option></FormField>
+              <FormField name="descripcion" label="Descripción" as="textarea" full placeholder="Descripción del espacio" />
+              <FormField name="equipamiento" label="Equipamiento" as="textarea" full placeholder="Equipos y recursos disponibles" />
+            </div>
+            {status && <div className="inline-error" role="alert">{status}</div>}
+            <div className="form-actions">
+              <button type="button" className="button button-secondary" onClick={() => setModalOpen(false)}>Cancelar</button>
+              <button type="submit" className="button" disabled={isSubmitting}>{isSubmitting ? 'Guardando...' : 'Registrar laboratorio'}</button>
+            </div>
+          </Form>}
+        </Formik>
+      </Modal>}
     </>
   )
 }
@@ -356,12 +447,14 @@ export function RequestersPage() {
   const { data, error, loading, reload } = useResource(() => api.requesters())
   const [search, setSearch] = useState('')
   const [toast, setToast] = useState('')
+  const [modalOpen, setModalOpen] = useState(false)
   const filtered = (data || []).filter((item) => `${item.nombres} ${item.apellidos} ${item.correo}`.toLowerCase().includes(search.toLowerCase()))
   async function create(values, { resetForm, setSubmitting, setStatus }) {
     setStatus('')
     try {
       await api.createRequester(values)
       resetForm()
+      setModalOpen(false)
       setToast('Solicitante registrado correctamente.')
       await reload()
     } catch (error) { setStatus(errorMessage(error)) }
@@ -369,30 +462,35 @@ export function RequestersPage() {
   }
   return (
     <>
-      <PageHeader eyebrow="Directorio" title="Solicitantes" description="Personas ficticias de demostración disponibles para registrar reservas." />
-      <div className="form-layout">
-        <section className="panel">
+      <PageHeader eyebrow="Directorio" title="Solicitantes" description="Personas registradas y disponibles para asignar a una reserva.">
+        <button className="button" type="button" onClick={() => setModalOpen(true)}><Plus size={15} /> Registrar solicitante</button>
+      </PageHeader>
+      <section className="panel">
           <div className="panel-heading"><h2>Personas registradas</h2></div>
           <div className="toolbar"><label className="search-control"><Search size={14} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nombre o correo..." aria-label="Buscar solicitante" /></label></div>
           {loading ? <LoadingState /> : error ? <ErrorState error={error} onRetry={reload} /> : filtered.length ? <div className="data-table-wrap"><table className="data-table">
             <thead><tr><th>Solicitante</th><th>Correo</th><th>Tipo</th></tr></thead>
             <tbody>{filtered.map((item) => <tr key={item.id}><td className="table-main">{item.nombres} {item.apellidos}</td><td>{item.correo}</td><td>{item.tipo_solicitante}</td></tr>)}</tbody>
           </table></div> : <EmptyState title="Sin solicitantes" description="Registra una persona para asignarla a una reserva." />}
-        </section>
+      </section>
+      {modalOpen && <Modal title="Registrar solicitante" onClose={() => setModalOpen(false)}>
+        <p className="modal-intro">Registra la persona que aparecerá como responsable de una reserva.</p>
         <Formik initialValues={{ nombres: '', apellidos: '', correo: '', tipo_solicitante: 'instructor' }} validationSchema={requesterSchema} onSubmit={create}>
-          {({ isSubmitting, status }) => <Form className="form-card">
-            <div className="panel-heading"><h2>Registrar solicitante</h2></div>
+          {({ isSubmitting, status }) => <Form>
             <div className="form-grid">
-              <FormField name="nombres" label="Nombres" full placeholder="Nombres de demostración" />
-              <FormField name="apellidos" label="Apellidos" full placeholder="Apellidos de demostración" />
+              <FormField name="nombres" label="Nombres" placeholder="Nombres" />
+              <FormField name="apellidos" label="Apellidos" placeholder="Apellidos" />
               <FormField name="correo" label="Correo" type="email" full placeholder="nombre@example.com" />
               <FormField name="tipo_solicitante" label="Tipo" as="select" full><option value="instructor">Instructor</option><option value="personal">Personal autorizado</option><option value="otro">Otro</option></FormField>
             </div>
-            {status && <div className="toast error" role="alert">{status}</div>}
-            <div className="form-actions"><button className="button" type="submit" disabled={isSubmitting}>{isSubmitting ? 'Guardando...' : 'Registrar'}</button></div>
+            {status && <div className="inline-error" role="alert">{status}</div>}
+            <div className="form-actions">
+              <button type="button" className="button button-secondary" onClick={() => setModalOpen(false)}>Cancelar</button>
+              <button className="button" type="submit" disabled={isSubmitting}>{isSubmitting ? 'Guardando...' : 'Registrar solicitante'}</button>
+            </div>
           </Form>}
         </Formik>
-      </div>
+      </Modal>}
       <Toast message={toast} />
     </>
   )

@@ -1,11 +1,13 @@
-let writeKey = ''
+let accessToken = ''
+let handleUnauthorized = () => {}
 
 const apiBase = import.meta.env.VITE_API_URL || (
   import.meta.env.DEV ? 'http://localhost:3000/api' : ''
 )
 
-export function setApiWriteKey(value) {
-  writeKey = value.trim()
+export function setApiSession(token, onUnauthorized = () => {}) {
+  accessToken = token
+  handleUnauthorized = onUnauthorized
 }
 
 export async function request(path, options = {}) {
@@ -16,7 +18,7 @@ export async function request(path, options = {}) {
   const method = options.method || 'GET'
   const headers = { Accept: 'application/json', ...options.headers }
   if (options.body) headers['Content-Type'] = 'application/json'
-  if (method !== 'GET' && writeKey) headers['x-api-key'] = writeKey
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`
 
   let response
   try {
@@ -28,15 +30,19 @@ export async function request(path, options = {}) {
   if (response.status === 204) return null
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw new Error(payload.message || `La solicitud falló (HTTP ${response.status}).`)
+    if (response.status === 401 && !path.startsWith('/auth/')) handleUnauthorized()
+    throw new Error(payload.error?.message || payload.message || `La solicitud falló (HTTP ${response.status}).`)
   }
   return payload.data
 }
 
 export const api = {
   health: () => request('/health'),
+  login: (data) => request('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
+  register: (data) => request('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
   dashboard: () => request('/dashboard'),
   laboratories: () => request('/laboratorios'),
+  createLaboratory: (data) => request('/laboratorios', { method: 'POST', body: JSON.stringify(data) }),
   requesters: () => request('/solicitantes'),
   createRequester: (data) => request('/solicitantes', { method: 'POST', body: JSON.stringify(data) }),
   reservations: (query = '') => request(`/reservas${query ? `?${query}` : ''}`),

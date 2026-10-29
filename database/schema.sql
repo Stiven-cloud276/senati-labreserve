@@ -34,10 +34,26 @@ CREATE TABLE IF NOT EXISTS solicitantes (
   KEY idx_solicitantes_nombre (apellidos, nombres)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS usuarios (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  nombres VARCHAR(80) NOT NULL,
+  apellidos VARCHAR(80) NOT NULL,
+  correo VARCHAR(160) NOT NULL,
+  password_hash VARCHAR(60) NOT NULL,
+  role ENUM('admin', 'usuario') NOT NULL DEFAULT 'usuario',
+  activo TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_usuarios_correo (correo),
+  KEY idx_usuarios_role_activo (role, activo)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS reservas (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   laboratorio_id INT UNSIGNED NOT NULL,
   solicitante_id INT UNSIGNED NOT NULL,
+  usuario_id INT UNSIGNED NULL,
   fecha DATE NOT NULL,
   hora_inicio TIME NOT NULL,
   hora_fin TIME NOT NULL,
@@ -51,8 +67,11 @@ CREATE TABLE IF NOT EXISTS reservas (
     REFERENCES laboratorios (id) ON UPDATE CASCADE ON DELETE RESTRICT,
   CONSTRAINT fk_reservas_solicitante FOREIGN KEY (solicitante_id)
     REFERENCES solicitantes (id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  CONSTRAINT fk_reservas_usuario FOREIGN KEY (usuario_id)
+    REFERENCES usuarios (id) ON UPDATE CASCADE ON DELETE SET NULL,
   CONSTRAINT chk_reservas_horario CHECK (hora_fin > hora_inicio),
   KEY idx_reservas_laboratorio_fecha_estado (laboratorio_id, fecha, estado),
   KEY idx_reservas_solicitante (solicitante_id),
+  KEY idx_reservas_usuario (usuario_id),
   KEY idx_reservas_fecha_estado (fecha, estado)
 ) ENGINE=InnoDB;
