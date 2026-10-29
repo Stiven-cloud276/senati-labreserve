@@ -5,7 +5,7 @@ Sistema académico demostrativo de gestión de reserva de laboratorios para SENA
 ## Alcance implementado
 
 - SPA en React con navegación por `HashRouter`, rutas protegidas frente a recargas de GitHub Pages y una página 404.
-- Dashboard con contadores y próximas reservas consultados desde la API.
+- Dashboard con contadores y próximas reservas en la API o el almacenamiento local de demostración.
 - Consulta de laboratorios, buscador, directorio de solicitantes y registro de solicitantes.
 - CRUD de reservas: listado, búsqueda, filtro, detalle, alta, edición y eliminación confirmada.
 - Calendario diario por laboratorio; selección de fecha y acceso al detalle de cada reserva.
@@ -22,7 +22,7 @@ Sistema académico demostrativo de gestión de reserva de laboratorios para SENA
 | Frontend | React, Vite, JavaScript, React Router, Formik, Yup, Lucide React |
 | Backend | Node.js, Express, mysql2/promise, dotenv, JWT, bcrypt, CORS, Helmet |
 | Datos | MySQL/MariaDB, InnoDB, claves foráneas e índices |
-| Despliegue | GitHub Pages (frontend), Render (API), MySQL administrado externo |
+| Despliegue | GitHub Pages (demo estática), Render opcional (API), MySQL |
 
 El monorepo utiliza workspaces de npm. `frontend/src/pages.jsx` agrupa vistas relacionadas; los componentes reutilizables están en `frontend/src/components/`, la comunicación API en `frontend/src/services/`, y las reglas de negocio HTTP se implementan en `backend/src/routes/` y `backend/src/utils/`.
 
@@ -38,7 +38,18 @@ Una reserva pendiente o confirmada bloquea disponibilidad; una cancelada no. Hay
 
 - Node.js 20.19+ o 22.12+ (Vite actual requiere una versión moderna; Node 22 LTS es recomendado).
 - npm.
-- MySQL 8+ o MariaDB compatible y XAMPP/phpMyAdmin para el flujo local.
+
+## Modalidades de ejecución
+
+### Full Stack local (API y MySQL)
+
+Esta modalidad conserva la autenticación real, los permisos por rol y la persistencia compartida del backend. Requiere Node.js, npm y MySQL 8+ o MariaDB compatible (XAMPP/phpMyAdmin sirve para desarrollo local). Sigue los pasos de instalación local indicados abajo. En `frontend/.env`, configura `VITE_DATA_MODE=api` y `VITE_API_URL=http://localhost:3000/api`; ese es el modo predeterminado si no se define `VITE_DATA_MODE`.
+
+### Demostración estática en GitHub Pages
+
+El workflow de GitHub Pages compila con `VITE_DATA_MODE=demo`; no requiere `VITE_API_URL`, Node.js instalado por el visitante, XAMPP, Render ni un backend. En la pantalla inicial, selecciona **Acceder a demostración**. No se solicitan credenciales y esta entrada no representa autenticación ni seguridad.
+
+La demostración usa datos ficticios y guarda reservas, laboratorios y solicitantes en `localStorage` del navegador. Los cambios sobreviven a recargas en el mismo navegador, pero no se sincronizan entre dispositivos o visitantes y no se guardan en la base de datos MySQL. La modalidad está identificada en la interfaz como **DEMOSTRACIÓN · DATOS LOCALES**. Para una publicación Full Stack con backend, compila con `VITE_DATA_MODE=api` y configura `VITE_API_URL`.
 
 ## Instalación local en Windows
 
@@ -49,6 +60,7 @@ Desde PowerShell, en la carpeta del proyecto:
 3. Opcionalmente importa `database/seed.sql` para cargar los datos ficticios de demostración.
 4. Copia `backend/.env.example` a `backend/.env`, configura la conexión local de MySQL y define `AUTH_TOKEN_SECRET` con al menos 32 caracteres aleatorios. Puedes generar uno con `node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"`. El `.env` está excluido de Git; no uses un secreto real en los archivos `.example`.
 5. Copia `frontend/.env.example` a `frontend/.env` si la API no está en `http://localhost:3000/api`.
+   Define también `VITE_DATA_MODE=api` para indicar explícitamente el modo Full Stack.
 6. Instala e inicia:
 
 ```powershell
@@ -114,26 +126,21 @@ Todas las rutas salvo health, login y registro requieren un token Bearer. Los us
 4. Importa el esquema y crea el primer administrador ejecutando `npm run create-admin --workspace backend` desde una terminal interactiva con las variables de conexión disponibles.
 5. `/api/health` verifica la conectividad MySQL. El plan gratuito de Render puede suspender el servicio por inactividad; la primera petición posterior puede tardar.
 
-### GitHub Pages (frontend)
+### GitHub Pages (modo demostración)
 
-1. Configura en el repositorio GitHub la variable de Actions `VITE_API_URL` con la URL HTTPS de la API más `/api`, por ejemplo `https://tu-api.onrender.com/api`.
-2. Habilita GitHub Pages con GitHub Actions y publica la rama `main`. El workflow `.github/workflows/pages.yml` instala, compila y publica `frontend/dist`.
-3. El `base` de Vite y `HashRouter` están preparados para el repositorio `senati-labreserve`. Si el nombre del repositorio cambia, actualiza `frontend/vite.config.js`.
-4. Añade el origen público `https://USUARIO.github.io` a `CORS_ORIGINS` en Render. GitHub Pages solo sirve archivos estáticos: el backend y MySQL deben desplegarse por separado.
+1. Habilita GitHub Pages con GitHub Actions y publica la rama `main`. El workflow `.github/workflows/pages.yml` instala y compila `frontend/dist` con `VITE_DATA_MODE=demo`; no necesita variables o secretos de API.
+2. La base de Vite se configura como `/senati-labreserve/` en producción y `HashRouter` mantiene la navegación estática compatible.
+3. La URL pública es `https://Stiven-cloud276.github.io/senati-labreserve/`. GitHub Pages solo sirve archivos estáticos; esta modalidad usa almacenamiento local del navegador y no se conecta a MySQL.
 
-No se han creado repositorios remotos ni se han realizado despliegues. No hay URL pública configurada en este proyecto.
+Para desplegar el frontend conectado a una API real, configura un workflow/entorno que compile con `VITE_DATA_MODE=api` y `VITE_API_URL` apuntando a la API HTTPS. Mantén las credenciales privadas solo en el backend; no coloques secretos en variables `VITE_*`.
+
+El remoto del proyecto es `https://github.com/Stiven-cloud276/senati-labreserve`. Estos cambios se preparan localmente y no se publicarán hasta recibir autorización para hacer push.
 
 ### Git y GitHub
 
-El repositorio Git local contiene `main` y la rama `feature/reservas`, con el desarrollo integrado en `main`. No hay remoto configurado. Cuando se cree el repositorio en GitHub, agrega su URL y publica ambas ramas:
+El repositorio Git local contiene `main` y `feature/reservas`; el trabajo de demostración se prepara en `feature/github-pages-demo` y se integra localmente a `main`. El remoto configurado apunta al repositorio indicado arriba. No se debe ejecutar `git push` hasta tener autorización explícita.
 
-```powershell
-git remote add origin https://github.com/USUARIO/senati-labreserve.git
-git push -u origin main
-git push -u origin feature/reservas
-```
-
-El PR y el enlace público deben añadirse únicamente después de crearlos realmente.
+Al publicar `main`, GitHub Actions compilará y desplegará la demostración estática si GitHub Pages está configurado para usar GitHub Actions. El enlace público es `https://Stiven-cloud276.github.io/senati-labreserve/`; la disponibilidad del despliegue depende de la configuración de Pages y de que el workflow termine correctamente.
 
 ## Pruebas y estado de validación
 

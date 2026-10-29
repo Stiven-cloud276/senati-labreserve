@@ -13,7 +13,7 @@ import {
   ReservationsPage,
   RequestersPage,
 } from './pages'
-import { setApiSession } from './services/api'
+import { demoMode, setApiSession } from './services/api'
 import './App.css'
 
 function App() {
@@ -30,6 +30,17 @@ function App() {
   function logout() {
     setApiSession('')
     setSession(null)
+  }
+
+  function enterDemo() {
+    setApiSession('')
+    setSession({
+      id: 1,
+      nombres: 'Visitante',
+      apellidos: 'Demostración',
+      role: 'admin',
+      isDemo: true,
+    })
   }
 
   return (
@@ -49,7 +60,7 @@ function App() {
             <Route path="*" element={<Navigate to="/404" replace />} />
           </Route>
         </Routes>
-      ) : <LoginPage onAuthenticate={authenticate} />}
+      ) : <LoginPage onAuthenticate={authenticate} demoMode={demoMode} onDemo={enterDemo} />}
     </HashRouter>
   )
 }

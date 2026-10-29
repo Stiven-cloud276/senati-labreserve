@@ -16,7 +16,7 @@ import {
   UsersRound,
 } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { api } from './services/api'
+import { api, demoMode } from './services/api'
 import { errorMessage, formatDate, shiftLocalDate, statusLabel, todayLocal } from './utils/format'
 import { EmptyState, ErrorState, LoadingState, Modal, PageHeader, StatusBadge, Toast } from './components/Common'
 
@@ -332,7 +332,9 @@ export function ReservationFormPage({ modal = false, user }) {
 
   const hint = <aside className="hint-card">
     <h3>Antes de reservar</h3>
-    <p>La disponibilidad se confirma en el servidor al guardar para evitar que dos personas ocupen el mismo laboratorio simultáneamente.</p>
+    <p>{demoMode
+      ? 'La disponibilidad se valida con datos locales de este navegador; no se sincroniza con otras personas.'
+      : 'La disponibilidad se confirma en el servidor al guardar para evitar que dos personas ocupen el mismo laboratorio simultáneamente.'}</p>
     <ul><li>La hora final debe ser posterior a la inicial.</li><li>Las reservas pendientes y confirmadas bloquean horario.</li><li>Las canceladas no bloquean la disponibilidad.</li></ul>
   </aside>
 
@@ -521,7 +523,7 @@ export function CalendarPage() {
             const className = reservation ? reservation.estado === 'pendiente' ? 'pending' : 'occupied' : ''
             return reservation ? <Link className={`time-slot ${className}`} to={`/reservas/${reservation.id}`} key={hour}><strong>{String(hour).padStart(2, '0')}:00</strong><small>{reservation.solicitante_nombre.split(' ')[0]}</small></Link> : <div className="time-slot" key={hour}><strong>{String(hour).padStart(2, '0')}:00</strong><small>Disponible</small></div>
           })}</div>
-        </article>)}</div> : <EmptyState title="No hay laboratorios activos" description="Los espacios aparecerán aquí cuando estén registrados en la base de datos." />}
+        </article>)}</div> : <EmptyState title="No hay laboratorios activos" description={demoMode ? 'No hay laboratorios activos guardados en esta demostración local.' : 'Los espacios aparecerán aquí cuando estén registrados en la base de datos.'} />}
         <div className="academic-note">La vista muestra bloques horarios de 07:00 a 18:00. Selecciona una reserva para consultar su detalle.</div>
       </section>
     </>

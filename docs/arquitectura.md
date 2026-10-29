@@ -12,7 +12,7 @@ API REST (Express en Render)
 MySQL/MariaDB administrado
 ```
 
-La SPA usa `HashRouter` para permitir navegación por rutas dinámicas en un hosting estático. El cliente concentra peticiones, errores HTTP y el token Bearer en memoria en `frontend/src/services/api.js`. Las páginas consultan datos reales; no se usa `localStorage` como persistencia.
+La SPA usa `HashRouter` para permitir navegación por rutas dinámicas en un hosting estático. El cliente concentra peticiones, errores HTTP y el token Bearer en memoria en `frontend/src/services/api.js`. `VITE_DATA_MODE=api` conecta con Express/MySQL; `VITE_DATA_MODE=demo` usa datos ficticios en `localStorage` para la demostración estática. Los cambios del modo demo son locales al navegador y no se comparten ni llegan a MySQL.
 
 ## Backend
 

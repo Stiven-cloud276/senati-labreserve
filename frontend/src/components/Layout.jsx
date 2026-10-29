@@ -71,10 +71,11 @@ export default function Layout({ user, onLogout }) {
           </div>
           <div className="topbar-right">
             <span className="today-label">{todayLabel}</span>
+            {user.isDemo && <span className="demo-mode-label">DEMOSTRACIÓN · DATOS LOCALES</span>}
             <div className="account-summary">
               <div className="user-avatar" aria-hidden="true">{user.nombres?.slice(0, 1)}{user.apellidos?.slice(0, 1)}</div>
               <span className="account-name">{user.nombres}</span>
-              <span className={`role-pill ${user.role === 'admin' ? 'admin' : ''}`}>{user.role === 'admin' ? 'Administrador' : 'Usuario'}</span>
+              <span className={`role-pill ${user.role === 'admin' && !user.isDemo ? 'admin' : ''}`}>{user.isDemo ? 'Demo' : user.role === 'admin' ? 'Administrador' : 'Usuario'}</span>
             </div>
             <button type="button" className="access-button" onClick={onLogout} aria-label="Cerrar sesión"><LogOut size={15} /> <span>Cerrar sesión</span></button>
           </div>

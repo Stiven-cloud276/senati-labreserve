@@ -1,5 +1,8 @@
+import { demoStore } from './demoStore'
+
 let accessToken = ''
 let handleUnauthorized = () => {}
+export const demoMode = import.meta.env.VITE_DATA_MODE === 'demo'
 
 const apiBase = import.meta.env.VITE_API_URL || (
   import.meta.env.DEV ? 'http://localhost:3000/api' : ''
@@ -8,6 +11,10 @@ const apiBase = import.meta.env.VITE_API_URL || (
 export function setApiSession(token, onUnauthorized = () => {}) {
   accessToken = token
   handleUnauthorized = onUnauthorized
+}
+
+function demoRequest(operation) {
+  return Promise.resolve().then(operation)
 }
 
 export async function request(path, options = {}) {
@@ -37,18 +44,18 @@ export async function request(path, options = {}) {
 }
 
 export const api = {
-  health: () => request('/health'),
+  health: () => demoMode ? demoRequest(() => demoStore.health()) : request('/health'),
   login: (data) => request('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
   register: (data) => request('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
-  dashboard: () => request('/dashboard'),
-  laboratories: () => request('/laboratorios'),
-  createLaboratory: (data) => request('/laboratorios', { method: 'POST', body: JSON.stringify(data) }),
-  requesters: () => request('/solicitantes'),
-  createRequester: (data) => request('/solicitantes', { method: 'POST', body: JSON.stringify(data) }),
-  reservations: (query = '') => request(`/reservas${query ? `?${query}` : ''}`),
-  reservation: (id) => request(`/reservas/${encodeURIComponent(id)}`),
-  createReservation: (data) => request('/reservas', { method: 'POST', body: JSON.stringify(data) }),
-  updateReservation: (id, data) => request(`/reservas/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteReservation: (id) => request(`/reservas/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-  availability: (date) => request(`/disponibilidad?fecha=${encodeURIComponent(date)}`),
+  dashboard: () => demoMode ? demoRequest(() => demoStore.dashboard()) : request('/dashboard'),
+  laboratories: () => demoMode ? demoRequest(() => demoStore.laboratories()) : request('/laboratorios'),
+  createLaboratory: (data) => demoMode ? demoRequest(() => demoStore.createLaboratory(data)) : request('/laboratorios', { method: 'POST', body: JSON.stringify(data) }),
+  requesters: () => demoMode ? demoRequest(() => demoStore.requesters()) : request('/solicitantes'),
+  createRequester: (data) => demoMode ? demoRequest(() => demoStore.createRequester(data)) : request('/solicitantes', { method: 'POST', body: JSON.stringify(data) }),
+  reservations: (query = '') => demoMode ? demoRequest(() => demoStore.reservations(query)) : request(`/reservas${query ? `?${query}` : ''}`),
+  reservation: (id) => demoMode ? demoRequest(() => demoStore.reservation(id)) : request(`/reservas/${encodeURIComponent(id)}`),
+  createReservation: (data) => demoMode ? demoRequest(() => demoStore.createReservation(data)) : request('/reservas', { method: 'POST', body: JSON.stringify(data) }),
+  updateReservation: (id, data) => demoMode ? demoRequest(() => demoStore.updateReservation(id, data)) : request(`/reservas/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteReservation: (id) => demoMode ? demoRequest(() => demoStore.deleteReservation(id)) : request(`/reservas/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  availability: (date) => demoMode ? demoRequest(() => demoStore.availability(date)) : request(`/disponibilidad?fecha=${encodeURIComponent(date)}`),
 }

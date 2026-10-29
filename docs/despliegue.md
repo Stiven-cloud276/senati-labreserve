@@ -1,8 +1,14 @@
 # Despliegue y pasos pendientes
 
-## GitHub Pages
+## GitHub Pages (demostración estática)
 
-El workflow `.github/workflows/pages.yml` construye `frontend` y publica `frontend/dist` al hacer push a `main`. Configura GitHub Pages para usar GitHub Actions y agrega la variable de repositorio `VITE_API_URL` con el origen del backend terminado en `/api`. El `base` de Vite está ajustado a `/senati-labreserve/`; cambia ese valor si el repositorio usa otro nombre.
+El workflow `.github/workflows/pages.yml` compila `frontend` con `VITE_DATA_MODE=demo` y publica `frontend/dist` al hacer push a `main`. No requiere `VITE_API_URL`, backend, secretos de API ni XAMPP. Configura GitHub Pages para publicar mediante GitHub Actions. Vite usa la base `/senati-labreserve/` y `HashRouter` conserva el enrutamiento compatible con hosting estático.
+
+La demostración permite consultar laboratorios, reservas y disponibilidad, y crear/editar/eliminar registros. Los datos son ficticios y se guardan en `localStorage` del navegador; no se comparten ni se sincronizan con MySQL. La pantalla y la barra superior identifican claramente este modo. URL esperada: `https://Stiven-cloud276.github.io/senati-labreserve/`.
+
+## Frontend Full Stack
+
+Para conectar la interfaz con una API real, compila con `VITE_DATA_MODE=api` y `VITE_API_URL` apuntando al backend por HTTPS y terminado en `/api`. Las variables `VITE_*` se incorporan al bundle y no deben contener contraseñas, tokens ni credenciales privadas.
 
 ## Render y MySQL administrado
 
@@ -10,15 +16,16 @@ El workflow `.github/workflows/pages.yml` construye `frontend` y publica `fronte
 
 El blueprint genera `AUTH_TOKEN_SECRET`; mantenlo solo como variable privada del backend. Crea el administrador inicial mediante `npm run create-admin --workspace backend` desde un entorno interactivo conectado a la base. El registro público crea exclusivamente cuentas estándar. Las rutas de datos exigen Bearer token.
 
+## Backend Render y MySQL
+
+Para la modalidad Full Stack, `render.yaml` define la API, su health check y las variables de entorno. Completa host, usuario, contraseña, nombre de base de datos, CORS y TLS desde Render. Usa MySQL persistente; importa esquema y, opcionalmente, datos ficticios con permisos suficientes. El blueprint genera `AUTH_TOKEN_SECRET`, que debe permanecer privado en el backend.
+
+El primer administrador se crea con `npm run create-admin --workspace backend` desde una terminal interactiva conectada a la base. El registro público solo crea usuarios estándar; las rutas de datos requieren autenticación. Mantén `CORS_ORIGINS` configurado con los orígenes que realmente utilizarán la API.
+
 ## Lista antes de publicar
 
-- Crear repositorio remoto en GitHub y subir el monorepo; no hay remoto configurado en el entorno actual.
-- Configurar secrets/variables y restringir acceso al proyecto.
-- Sustituir `CORS_ORIGINS` por el origen exacto de GitHub Pages.
-- Importar esquema (y, opcionalmente, datos ficticios) en la base administrada y verificar TLS.
-- Crear la primera cuenta administradora desde una terminal segura.
-- Ejecutar la suite y pruebas manuales de API/horarios concurrentes.
-- Configurar GitHub Pages y validar las rutas, recursos y mutaciones a través del backend.
+- Habilitar GitHub Pages con GitHub Actions y verificar la ejecución del workflow.
+- Para un despliegue Full Stack, probar API, MySQL, autenticación, CORS y conflictos horarios.
 - No incluir nombres, credenciales ni datos reales de estudiantes.
 
 El plan gratuito de Render puede suspender el servicio si no recibe tráfico; la reanudación inicial puede demorar. Un endpoint de health no elimina esa limitación.

@@ -29,13 +29,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Validate frontend API URL
-        run: test -n "$VITE_API_URL" || { echo "Configure the VITE_API_URL repository variable." >&2; exit 1; }
-        env:
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
       - run: npm run build --workspace frontend
         env:
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_DATA_MODE: demo
       - uses: actions/upload-pages-artifact@v3
         with:
           path: frontend/dist

@@ -80,7 +80,7 @@ function RegisterDialog({ onClose, onAuthenticate }) {
   )
 }
 
-export default function LoginPage({ onAuthenticate }) {
+export default function LoginPage({ onAuthenticate, demoMode = false, onDemo }) {
   const [registerOpen, setRegisterOpen] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
@@ -111,8 +111,16 @@ export default function LoginPage({ onAuthenticate }) {
       <section className="auth-form-side">
         <div className="auth-mobile-brand"><Logo compact /></div>
         <div className="auth-form-wrap">
-          <h2>Iniciar sesión</h2>
-          <p className="auth-subtitle">Ingresa tus credenciales para continuar a LABRESERVE.</p>
+          {demoMode ? <>
+            <h2>Explora LABRESERVE</h2>
+            <p className="auth-subtitle">Ingresa al modo demostrativo con datos ficticios guardados solo en este navegador.</p>
+            <button type="button" className="button auth-submit demo-entry-button" onClick={onDemo}>
+              Acceder a demostración <ArrowRight size={15} />
+            </button>
+            <div className="demo-disclaimer">Esta demostración no utiliza cuentas ni protege datos. Los cambios se guardan en este navegador y no se sincronizan con otros navegadores o dispositivos.</div>
+          </> : <>
+            <h2>Iniciar sesión</h2>
+            <p className="auth-subtitle">Ingresa tus credenciales para continuar a LABRESERVE.</p>
           <Formik initialValues={{ correo: '', password: '' }} validationSchema={loginSchema} onSubmit={login}>
             {({ isSubmitting, status }) => <Form className="auth-form">
               <AccountField name="correo" label="Correo electrónico" type="email" placeholder="tu-correo@example.com" autoComplete="username" />
@@ -135,6 +143,7 @@ export default function LoginPage({ onAuthenticate }) {
             <button type="button" onClick={() => setRegisterOpen(true)}><UserRoundPlus size={15} /> Registrarme</button>
           </div>
           <div className="auth-security-note"><LockKeyhole size={13} /> Las contraseñas se almacenan cifradas y no se guardan en este navegador.</div>
+          </>}
         </div>
       </section>
       {registerOpen && <RegisterDialog onClose={() => setRegisterOpen(false)} onAuthenticate={onAuthenticate} />}
